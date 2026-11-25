@@ -9,7 +9,7 @@ interface GameHUDProps {
   onTogglePause: () => void;
 }
 
-/** Minimal upper HUD; compact and translucent power meter stays clear of play. */
+/** Essential top HUD and a small centered power meter. */
 export function GameHUD({ hud, onOpenCharacterSelect, onTogglePause }: GameHUDProps) {
   if (hud.phase !== 'PLAYING') return null;
   const character = CHARACTERS[hud.characterId];
@@ -42,13 +42,13 @@ export function GameHUD({ hud, onOpenCharacterSelect, onTogglePause }: GameHUDPr
         </div>
       </header>
 
-      <div className="power-hud fixed bottom-[max(0.55rem,env(safe-area-inset-bottom))] left-[max(0.55rem,env(safe-area-inset-left))] z-20 w-[min(34vw,10rem)] rounded-lg border border-[#110B1E]/70 bg-[#1A0B33]/55 p-1 text-left shadow backdrop-blur-[2px] sm:bottom-5 sm:left-5 sm:w-52 sm:rounded-xl sm:border-2 sm:bg-[#1A0B33]/90 sm:p-2 sm:backdrop-blur-sm" aria-label={`${character.powerName}: ${hud.powerActive ? 'activo' : hud.powerCooldown > 0 ? 'recargando' : `${Math.round(hud.fluid)} de ${hud.maxFluid} de líquido`}`}>
+      <div className="power-hud fixed left-1/2 top-2.5 z-20 w-[min(34vw,10rem)] -translate-x-1/2 rounded-lg border border-[#110B1E]/65 bg-[#1A0B33]/55 p-1 text-left shadow backdrop-blur-[2px] sm:w-52 sm:rounded-xl sm:border-2 sm:bg-[#1A0B33]/85 sm:p-2 sm:backdrop-blur-sm" aria-label={`${character.powerName}: ${hud.powerActive ? 'activo' : hud.powerCooldown > 0 ? 'recargando' : `${Math.round(hud.fluid)} de ${hud.maxFluid} de líquido`}`}>
         <span className="mb-0.5 flex items-center justify-between gap-1 text-[8px] font-bold leading-tight tracking-wide text-amber-100/90 sm:mb-1 sm:gap-2 sm:text-[10px] sm:text-amber-200"><span className="flex min-w-0 items-center gap-1"><Zap className="h-2.5 w-2.5 shrink-0 sm:h-3.5 sm:w-3.5" /><span className="truncate">{character.powerName}</span></span><span className="shrink-0">{hud.powerActive ? `${hud.powerTimer.toFixed(1)}s` : hud.powerCooldown > 0.05 ? `${hud.powerCooldown.toFixed(1)}s` : `${Math.round(hud.fluid)}/${hud.maxFluid}`}</span></span>
         <span className="block h-1.5 overflow-hidden rounded-full border border-[#110B1E]/80 bg-[#10071f]/75 sm:h-3" role="progressbar" aria-label="Carga y disponibilidad del poder" aria-valuemin={0} aria-valuemax={100} aria-valuenow={powerPct}>
           <span className={`block h-full transition-[width] duration-200 ${powerReady || hud.powerActive ? 'bg-gradient-to-r from-[#FF2A00] via-[#FF7B00] to-[#FFE600]' : 'bg-gradient-to-r from-slate-600 to-slate-400'}`} style={{ width: `${powerPct}%` }} />
         </span>
       </div>
-      {hud.powerFeedback && <div className="pointer-events-none fixed bottom-12 left-2 z-20 max-w-[34vw] truncate rounded-md bg-[#FFE600]/85 px-1.5 py-0.5 text-[9px] font-bold text-[#110B1E] sm:bottom-20 sm:left-5 sm:max-w-none sm:rounded-lg sm:px-3 sm:py-1 sm:text-xs">{hud.powerFeedback}</div>}
+      {hud.powerFeedback && <div className="pointer-events-none fixed left-1/2 top-11 z-20 max-w-[min(65vw,22rem)] -translate-x-1/2 truncate rounded-md bg-[#FFE600]/85 px-2 py-1 text-[9px] font-bold text-[#110B1E] sm:top-[3.6rem] sm:rounded-lg sm:px-3 sm:text-xs">{hud.powerFeedback}</div>}
     </>
   );
 }
