@@ -12,105 +12,72 @@ const dispatchKey = (code: string, type: 'keydown' | 'keyup') => {
   window.dispatchEvent(new KeyboardEvent(type, { code, key, bubbles: true }));
 };
 
-/** Gesto de arrastre sobre el escenario y un único botón: toque=saltar, mantener=poder. */
+/** Drag to move/crouch, with independent tap controls for jump and power. */
 export function TouchControls({ canvas, onJump, onPower }: TouchControlsProps) {
-  const actionTimer = useRef<number | null>(null);
-  const powerTriggered = useRef(false);
+  const callbacks = useRef({ onJump, onPower });
+  callbacks.current = { onJump, onPower };
 
   useEffect(() => {
     if (!canvas) return;
-    let pointerId: number | null = null;
-    let startX = 0;
-    let startY = 0;
-    let movingCode: 'ArrowLeft' | 'ArrowRight' | null = null;
-    let crouching = false;
-
+    const activePointers = new Map<number, { startX: number; startY: number; direction: 'ArrowLeft' | 'ArrowRight' | null; crouching: boolean }>();
+    const setPointerKeys = (state: { direction: 'ArrowLeft' | 'ArrowRight' | null; crouching: boolean }, direction: 'ArrowLeft' | 'ArrowRight' | null, crouching: boolean) => {
+      if (state.direction !== direction) {
+        if (state.direction) dispatchKey(state.direction, 'keyup');
+        if (direction) dispatchKey(direction, 'keydown');
+        state.direction = direction;
+      }
+      if (state.crouching !== crouching) {
+        dispatchKey('ArrowDown', crouching ? 'keydown' : 'keyup');
+        state.crouching = crouching;
+      }
+    };
     const onDown = (event: PointerEvent) => {
       if (event.target !== canvas || event.pointerType === 'mouse') return;
-      pointerId = event.pointerId;
-      startX = event.clientX;
-      startY = event.clientY;
-      canvas.setPointerCapture?.(event.pointerId);
       event.preventDefault();
+      activePointers.set(event.pointerId, { startX: event.clientX, startY: event.clientY, direction: null, crouching: false });
+      try { canvas.setPointerCapture(event.pointerId); } catch { /* pointer may have already ended */ }
     };
     const onMove = (event: PointerEvent) => {
-      if (event.pointerId !== pointerId) return;
+      const state = activePointers.get(event.pointerId);
+      if (!state) return;
       event.preventDefault();
-      const dx = event.clientX - startX;
-      const dy = event.clientY - startY;
-      const nextDirection = Math.abs(dx) > 18 ? (dx < 0 ? 'ArrowLeft' : 'ArrowRight') : null;
-      if (nextDirection !== movingCode) {
-        if (movingCode) dispatchKey(movingCode, 'keyup');
-        movingCode = nextDirection;
-        if (movingCode) dispatchKey(movingCode, 'keydown');
-      }
-      const shouldCrouch = dy > 28;
-      if (shouldCrouch !== crouching) {
-        crouching = shouldCrouch;
-        dispatchKey('ArrowDown', crouching ? 'keydown' : 'keyup');
-      }
+      const dx = event.clientX - state.startX;
+      const dy = event.clientY - state.startY;
+      // A stable dead zone around the initial contact; direction follows total drag, not noisy deltas.
+      const direction = Math.abs(dx) < 26 ? null : dx < 0 ? 'ArrowLeft' : 'ArrowRight';
+      // Downward crouch is latched at a clear threshold and released on the way back up.
+      const crouching = dy > 38;
+      setPointerKeys(state, direction, crouching);
     };
     const finish = (event: PointerEvent) => {
-      if (event.pointerId !== pointerId) return;
-      if (movingCode) dispatchKey(movingCode, 'keyup');
-      if (crouching) dispatchKey('ArrowDown', 'keyup');
-      movingCode = null;
-      crouching = false;
-      pointerId = null;
+      const state = activePointers.get(event.pointerId);
+      if (!state) return;
+      setPointerKeys(state, null, false);
+      activePointers.delete(event.pointerId);
     };
-
     canvas.addEventListener('pointerdown', onDown, { passive: false });
     canvas.addEventListener('pointermove', onMove, { passive: false });
     canvas.addEventListener('pointerup', finish);
     canvas.addEventListener('pointercancel', finish);
+    canvas.addEventListener('lostpointercapture', finish);
     return () => {
       canvas.removeEventListener('pointerdown', onDown);
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerup', finish);
       canvas.removeEventListener('pointercancel', finish);
-      if (movingCode) dispatchKey(movingCode, 'keyup');
-      if (crouching) dispatchKey('ArrowDown', 'keyup');
+      canvas.removeEventListener('lostpointercapture', finish);
+      for (const state of activePointers.values()) setPointerKeys(state, null, false);
+      activePointers.clear();
     };
   }, [canvas]);
 
-  useEffect(() => () => {
-    if (actionTimer.current !== null) window.clearTimeout(actionTimer.current);
-  }, []);
-
-  const beginAction = (event: React.PointerEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    powerTriggered.current = false;
-    actionTimer.current = window.setTimeout(() => {
-      powerTriggered.current = true;
-      onPower();
-    }, 420);
-  };
-  const endAction = (event: React.PointerEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (actionTimer.current !== null) window.clearTimeout(actionTimer.current);
-    actionTimer.current = null;
-    if (!powerTriggered.current) onJump();
-  };
-
   return (
     <nav className="touch-controls fixed inset-0 z-20 pointer-events-none" aria-label="Controles táctiles">
-      <button
-        type="button"
-        className="touch-control touch-action-button pointer-events-auto fixed bottom-5 right-5"
-        aria-label="Tocar para saltar; mantener para activar el poder"
-        title="Toque: saltar · Mantener: poder"
-        onPointerDown={beginAction}
-        onPointerUp={endAction}
-        onPointerCancel={endAction}
-        onLostPointerCapture={endAction}
-        onContextMenu={(event) => event.preventDefault()}
-      >
-        <ArrowUp className="h-7 w-7" />
-        <Zap className="touch-action-badge h-4 w-4" />
-      </button>
+      <div className="touch-action-group pointer-events-auto fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] flex items-center gap-3 sm:gap-4">
+        <button type="button" className="touch-control touch-jump" aria-label="Saltar" title="Saltar" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); callbacks.current.onJump(); }} onContextMenu={(event) => event.preventDefault()}><ArrowUp className="h-6 w-6" /></button>
+        <button type="button" className="touch-control touch-power" aria-label="Activar poder" title="Activar poder" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); callbacks.current.onPower(); }} onContextMenu={(event) => event.preventDefault()}><Zap className="h-6 w-6" /></button>
+      </div>
+      <p className="touch-gesture-hint pointer-events-none fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 rounded-full bg-[#120722]/45 px-2 py-1 text-[9px] text-white/60">Arrastrá para moverte · hacia abajo para agacharte</p>
     </nav>
   );
 }
