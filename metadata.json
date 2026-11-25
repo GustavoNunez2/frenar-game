@@ -1,0 +1,6 @@
+{
+  "name": "Camino a FRENAR",
+  "description": "Juego 2D de plataformas lateral con estética psicodélica surrealista: recolecta repuestos y líquido de freno con 6 personajes únicos hasta llegar al taller FRENAR.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
